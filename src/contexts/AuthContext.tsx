@@ -8,13 +8,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [users, setUsers] = useState<User[]>([]);
   const [authInitialized, setAuthInitialized] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
 
   // تحميل المستخدم الحالي
   useEffect(() => {
-    let isMounted = true;
+    if (authInitialized) return; // منع إعادة التهيئة
 
+    let isMounted = true;
     const initializeAuth = async () => {
       try {
         console.log('بدء تهيئة المصادقة...');
@@ -24,6 +25,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (error) {
           console.error('Session error:', error);
           if (isMounted) {
+            setUser(null);
             setIsLoading(false);
             setAuthInitialized(true);
           }
@@ -35,12 +37,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           await loadUserProfile(session.user.id);
         } else if (isMounted) {
           console.log('لا توجد جلسة نشطة');
+          setUser(null);
           setIsLoading(false);
           setAuthInitialized(true);
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
         if (isMounted) {
+          setUser(null);
           setIsLoading(false);
           setAuthInitialized(true);
         }
@@ -54,12 +58,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       async (event, session) => {
         console.log('Auth state changed:', event);
         
-        if (event === 'SIGNED_IN' && session?.user && isMounted) {
+        if (event === 'SIGNED_IN' && session?.user) {
           await loadUserProfile(session.user.id);
-        } else if (event === 'SIGNED_OUT' && isMounted) {
+        } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setIsLoading(false);
-          setAuthInitialized(true);
         }
       }
     );
@@ -68,7 +71,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [authInitialized]);
 
   // تحميل ملف المستخدم الشخصي
   const loadUserProfile = async (userId: string) => {
@@ -100,7 +103,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 id: authUser.user.id,
                 email: authUser.user.email || '',
                 name: authUser.user.email?.split('@')[0] || 'مستخدم',
-                role: 'admin' // أول مستخدم يكون admin
+                role: 'member', // الدور الافتراضي
+                company_id: 'demo-company-id'
               });
             
             if (!insertError) {
@@ -129,14 +133,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         setUser(userData);
         console.log('تم تعيين بيانات المستخدم بنجاح');
+        setIsLoading(false);
         setAuthInitialized(true);
       }
       
     } catch (error) {
       console.error('Error loading user profile:', error);
       toast.error('حدث خطأ في تحميل بيانات المستخدم');
-    } finally {
       setIsLoading(false);
+      setAuthInitialized(true);
+    } finally {
       console.log('تم إنهاء تحميل الملف الشخصي');
     }
   };

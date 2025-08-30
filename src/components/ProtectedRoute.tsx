@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, authInitialized } = useAuth();
   const [timeoutReached, setTimeoutReached] = useState(false);
 
   // Debug logging
@@ -20,22 +20,22 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   // إضافة timeout للتحميل
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (isLoading) {
+      if (isLoading && !authInitialized) {
         console.log('انتهت مهلة التحميل، إعادة توجيه لتسجيل الدخول');
         setTimeoutReached(true);
       }
-    }, 10000); // 10 ثواني
+    }, 5000); // 5 ثواني
 
     return () => clearTimeout(timer);
-  }, [isLoading]);
+  }, [isLoading, authInitialized]);
 
   // إذا انتهت المهلة أو لا يوجد مستخدم
-  if (timeoutReached || (!isLoading && !user)) {
+  if (timeoutReached || (authInitialized && !user)) {
     console.log('ProtectedRoute - توجيه إلى صفحة تسجيل الدخول');
     return <Navigate to="/login" replace />;
   }
   
-  if (isLoading) {
+  if (isLoading || !authInitialized) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-accent-light/30 via-accent-light/20 to-accent-dark/20 flex items-center justify-center">
         <div className="text-center">
@@ -46,7 +46,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
       </div>
     );
   }
-
 
   console.log('ProtectedRoute - عرض المحتوى المحمي');
   return <>{children}</>;

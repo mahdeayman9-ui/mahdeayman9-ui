@@ -153,6 +153,7 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
+  authInitialized: boolean;
   addUser?: (user: User) => void;
   users?: User[];
 }
