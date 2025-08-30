@@ -77,8 +77,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const loadUserProfile = async (userId: string) => {
     console.log('تحميل الملف الشخصي للمستخدم:', userId);
     
-    console.log('تحميل الملف الشخصي للمستخدم:', userId);
-    
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -97,27 +95,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const { data: authUser } = await supabase.auth.getUser();
           
           if (authUser.user) {
-            const { error: insertError } = await supabase
+            const { data: newProfile, error: insertError } = await supabase
               .from('profiles')
               .insert({
                 id: authUser.user.id,
                 email: authUser.user.email || '',
                 name: authUser.user.email?.split('@')[0] || 'مستخدم',
                 role: 'member', // الدور الافتراضي
-                company_id: 'demo-company-id'
-              });
+                company_id: null
+              })
+              .select()
+              .single();
             
-            if (!insertError) {
+            if (!insertError && newProfile) {
               console.log('تم إنشاء الملف الشخصي بنجاح');
-              // إعادة تحميل الملف الشخصي
-              return await loadUserProfile(userId);
+              // استخدام الملف الشخصي الجديد مباشرة
+              const userData: User = {
+                id: newProfile.id,
+                email: newProfile.email,
+                name: newProfile.name,
+                role: newProfile.role as 'admin' | 'manager' | 'member',
+                username: newProfile.username || undefined,
+                teamId: newProfile.team_id || undefined,
+              };
+              setUser(userData);
+              setIsLoading(false);
+              setAuthInitialized(true);
+              return;
+            } else {
+              console.error('فشل في إنشاء الملف الشخصي:', insertError);
             }
           }
         }
         
-        toast.error('فشل في تحميل بيانات المستخدم');
-        console.log('انتهت مهلة تحميل الملف الشخصي');
+        console.error('فشل في تحميل الملف الشخصي');
         setIsLoading(false);
+        setAuthInitialized(true);
         return;
       }
 
@@ -132,17 +145,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           teamId: profile.team_id || undefined,
         };
         setUser(userData);
-        console.log('تم تعيين بيانات المستخدم بنجاح');
-        setIsLoading(false);
-        setAuthInitialized(true);
+      } else {
+        console.error('لم يتم العثور على ملف شخصي');
+        setUser(null);
       }
       
     } catch (error) {
       console.error('Error loading user profile:', error);
-      toast.error('حدث خطأ في تحميل بيانات المستخدم');
+      setUser(null);
+    } finally {
       setIsLoading(false);
       setAuthInitialized(true);
-    } finally {
       console.log('تم إنهاء تحميل الملف الشخصي');
     }
   };
