@@ -106,9 +106,9 @@ export const Login: React.FC = () => {
         <div className="mt-6 p-4 bg-accent-light/20 rounded-lg border border-accent-light/30">
           <p className="text-xs text-accent-dark/80 mb-2">حسابات تجريبية:</p>
           <ul className="text-xs space-y-1">
-            <li><strong>مدير:</strong> admin@demo.com / password123</li>
-            <li><strong>مدير فريق:</strong> manager@demo.com / password123</li>
-            <li><strong>عضو:</strong> member@demo.com / password123</li>
+            <li><strong>مدير:</strong> admin@demo.com / password</li>
+            <li><strong>مدير فريق:</strong> manager@demo.com / password</li>
+            <li><strong>عضو:</strong> member@demo.com / password</li>
             <li><strong>قائد فريق:</strong> استخدم اسم المستخدم وكلمة المرور المولدة</li>
           </ul>
         </div>

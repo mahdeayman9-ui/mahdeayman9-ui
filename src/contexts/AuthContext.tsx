@@ -8,27 +8,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [authInitialized, setAuthInitialized] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
 
   // تحميل المستخدم الحالي
   useEffect(() => {
-    if (authInitialized) return; // منع إعادة التهيئة
-
     let isMounted = true;
+
     const initializeAuth = async () => {
       try {
-        console.log('بدء تهيئة المصادقة...');
         // التحقق من الجلسة الحالية
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Session error:', error);
-          if (isMounted) {
-            setUser(null);
-            setIsLoading(false);
-            setAuthInitialized(true);
-          }
+          if (isMounted) setIsLoading(false);
           return;
         }
 
@@ -37,17 +30,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           await loadUserProfile(session.user.id);
         } else if (isMounted) {
           console.log('لا توجد جلسة نشطة');
-          setUser(null);
           setIsLoading(false);
-          setAuthInitialized(true);
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
-        if (isMounted) {
-          setUser(null);
-          setIsLoading(false);
-          setAuthInitialized(true);
-        }
+        if (isMounted) setIsLoading(false);
       }
     };
 
@@ -58,9 +45,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       async (event, session) => {
         console.log('Auth state changed:', event);
         
-        if (event === 'SIGNED_IN' && session?.user) {
+        if (event === 'SIGNED_IN' && session?.user && isMounted) {
           await loadUserProfile(session.user.id);
-        } else if (event === 'SIGNED_OUT') {
+        } else if (event === 'SIGNED_OUT' && isMounted) {
           setUser(null);
           setIsLoading(false);
         }
@@ -71,7 +58,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [authInitialized]);
+  }, []);
 
   // تحميل ملف المستخدم الشخصي
   const loadUserProfile = async (userId: string) => {
@@ -95,42 +82,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const { data: authUser } = await supabase.auth.getUser();
           
           if (authUser.user) {
-            const { data: newProfile, error: insertError } = await supabase
+            const { error: insertError } = await supabase
               .from('profiles')
               .insert({
                 id: authUser.user.id,
                 email: authUser.user.email || '',
                 name: authUser.user.email?.split('@')[0] || 'مستخدم',
-                role: 'member', // الدور الافتراضي
-                company_id: null
-              })
-              .select()
-              .single();
+                role: 'admin' // أول مستخدم يكون admin
+              });
             
-            if (!insertError && newProfile) {
+            if (!insertError) {
               console.log('تم إنشاء الملف الشخصي بنجاح');
-              // استخدام الملف الشخصي الجديد مباشرة
-              const userData: User = {
-                id: newProfile.id,
-                email: newProfile.email,
-                name: newProfile.name,
-                role: newProfile.role as 'admin' | 'manager' | 'member',
-                username: newProfile.username || undefined,
-                teamId: newProfile.team_id || undefined,
-              };
-              setUser(userData);
-              setIsLoading(false);
-              setAuthInitialized(true);
-              return;
-            } else {
-              console.error('فشل في إنشاء الملف الشخصي:', insertError);
+              // إعادة تحميل الملف الشخصي
+              return await loadUserProfile(userId);
             }
           }
         }
         
-        console.error('فشل في تحميل الملف الشخصي');
+        toast.error('فشل في تحميل بيانات المستخدم');
         setIsLoading(false);
-        setAuthInitialized(true);
         return;
       }
 
@@ -145,17 +115,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           teamId: profile.team_id || undefined,
         };
         setUser(userData);
-      } else {
-        console.error('لم يتم العثور على ملف شخصي');
-        setUser(null);
+        console.log('تم تعيين بيانات المستخدم بنجاح');
       }
       
     } catch (error) {
       console.error('Error loading user profile:', error);
-      setUser(null);
+      toast.error('حدث خطأ في تحميل بيانات المستخدم');
     } finally {
       setIsLoading(false);
-      setAuthInitialized(true);
       console.log('تم إنهاء تحميل الملف الشخصي');
     }
   };
@@ -163,7 +130,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // تحميل جميع المستخدمين (للمديرين)
   const loadUsers = async () => {
     try {
-      
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select('*')
@@ -227,6 +193,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { error } = await supabase.auth.signOut();
       if (error) {
         toast.error(handleSupabaseError(error));
+      } else {
+        setUser(null);
+        toast.success('تم تسجيل الخروج بنجاح');
       }
     } catch (error) {
       console.error('Logout error:', error);
@@ -238,6 +207,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addUser = async (newUser: Omit<User, 'id'> & { password?: string; generatedPassword?: string }) => {
     try {
       const password = newUser.password || newUser.generatedPassword || 'defaultPassword123';
+      
       // إنشاء حساب المصادقة
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUser.email,
